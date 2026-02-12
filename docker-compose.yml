@@ -1,0 +1,42 @@
+x-db-env: &db_env
+  POSTGRES_DB: $PSQL_NAME
+  POSTGRES_USER: $PSQL_USER
+  POSTGRES_PASSWORD: $PSQL_PASS
+
+x-backend-env: &backend_env
+   <<: *db_env
+   DJANGO_SECRET_KEY: $DJANGO_SECRET_KEY
+   DJANGO_DEBUG: $DJANGO_DEBUG
+   POSTGRES_HOST: postgres_db
+   POSTGRES_PORT: $PSQL_PORT
+
+services:
+  backend:
+    restart: always
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    entrypoint: ["sh", "-c", "python manage.py migrate && python manage.py collectstatic && uvicorn todo_list.asgi:application --host 0.0.0.0 --port 8000"]
+    environment:
+      <<: *backend_env
+    ports:
+      - "8000:8000"
+#    networks:
+#      - internal_net
+
+  postgres_db:
+    restart: always
+    image: postgres:16
+    environment:
+      <<: *db_env
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+#    networks:
+#      - internal_net
+
+volumes:
+  postgres_data:
+
+networks:
+  internal_net:
+    driver: bridge
