@@ -1,16 +1,15 @@
 from collections import defaultdict
-from typing import Optional, List
-from datetime import datetime
-from dateutil.parser import parse, ParserError
+from typing import List
 
 from aiogram.types import CallbackQuery, Message, User
-from aiogram_dialog import DialogManager, ShowMode
+from aiogram_dialog import DialogManager
 from aiogram_dialog.widgets.input import ManagedTextInput
 from aiogram_dialog.widgets.kbd import Button
 
 from api.client import client
-from api.models import TaskListResponse, GetCategoryByNameResponse
+from api.models import TaskListResponse
 from states import BotStates
+from utils.functions import create_task, parse_date
 
 
 async def go_to_tasks(callback: CallbackQuery, button: Button, manager: DialogManager):
@@ -25,11 +24,7 @@ async def go_to_add_category(callback: CallbackQuery, button: Button, manager: D
     await manager.switch_to(BotStates.ADD_CATEGORY)
 
 
-async def get_tasks_data(
-        dialog_manager: DialogManager,
-        event_from_user: User,
-        **kwargs
-) -> dict:
+async def get_tasks_data(dialog_manager: DialogManager, event_from_user: User, **kwargs) -> dict:
     try:
         tasks_data: List[TaskListResponse] = await client.list_tasks(
             params={"user_id": event_from_user.id}
@@ -75,11 +70,7 @@ async def get_tasks_data(
     return {"tasks": text}
 
 
-async def get_new_task_data(
-        dialog_manager: DialogManager,
-        event_from_user: User,
-        **kwargs
-) -> dict:
+async def get_new_task_data(dialog_manager: DialogManager, event_from_user: User, **kwargs) -> dict:
     task_text = dialog_manager.dialog_data.get("temp_task_text")
     category_name = dialog_manager.dialog_data.get("temp_category", None)
     return {
@@ -88,7 +79,7 @@ async def get_new_task_data(
     }
 
 
-async def save_category(message: Message, widget: ManagedTextInput, manager: DialogManager, value: str):
+async def save_new_category(message: Message, widget: ManagedTextInput, manager: DialogManager, value: str):
     category_name = value.strip()
     await client.get_or_create_category_by_name({"user_id": message.from_user.id, "name": category_name})
     await manager.switch_to(BotStates.TASKS)
@@ -97,6 +88,11 @@ async def save_category(message: Message, widget: ManagedTextInput, manager: Dia
 async def save_task_category(message: Message, widget: ManagedTextInput, manager: DialogManager, value: str):
     category_name = value.strip()
     manager.dialog_data["temp_category"] = category_name
+    await manager.switch_to(BotStates.ADD_TASK_TEXT)
+
+
+async def skip_task_category(callback: CallbackQuery, button: Button, manager: DialogManager):
+    manager.dialog_data["task_category"] = None
     await manager.switch_to(BotStates.ADD_TASK_TEXT)
 
 
@@ -109,80 +105,20 @@ async def save_task_text(message: Message, widget: ManagedTextInput, manager: Di
         await manager.switch_to(BotStates.TASKS)
 
 
-async def save_task(
-        task_text: str,
-        user_id: int,
-        category_name: Optional[str] = None,
-        scheduled_at: Optional[datetime] = None,
-):
-    if task_text:
-        if category_name:
-            response: GetCategoryByNameResponse = await client.get_or_create_category_by_name(
-                {"user_id": user_id, "name": category_name})
-            category = response.id
-        else:
-            category = None
-
-        data = {"user_id": user_id, "content": task_text, "category": category,
-                "scheduled_at": scheduled_at.isoformat()}
-        await client.create_task(data)
-
-
-async def parse_date(s: str) -> datetime:
-    s = s.strip()
-
-    today = datetime.today()
-    default = today.replace(hour=0, minute=0, second=0, microsecond=0)
-
-    try:
-        dt = parse(
-            s,
-            dayfirst=False,
-            yearfirst=False,
-            default=default,
-            fuzzy=False,
-        )
-
-        if dt.year == 1900:
-            dt = dt.replace(year=today.year)
-
-        return dt
-
-    except ParserError as e:
-        raise ValueError(f"Could not parse date/time: {s!r}") from e
-    except OverflowError:
-        raise ValueError(f"Date/time value out of range: {s!r}")
-
-
 async def save_task_schedule(message: Message, widget: ManagedTextInput, manager: DialogManager, value: str):
     schedule_at = await parse_date(value)
     manager.dialog_data["scheduled_at"] = schedule_at
     await manager.switch_to(BotStates.CREATE_TASK)
 
 
-async def skip_task_schedule(
-        callback: CallbackQuery,
-        button: Button,
-        manager: DialogManager,
-) -> None:
+async def skip_task_schedule(callback: CallbackQuery, button: Button, manager: DialogManager):
     manager.dialog_data["scheduled_at"] = None
     await manager.switch_to(BotStates.CREATE_TASK)
 
 
-async def skip_task_category(
-        callback: CallbackQuery,
-        button: Button,
-        manager: DialogManager,
-) -> None:
-    manager.dialog_data["task_category"] = None
-    await manager.switch_to(BotStates.ADD_TASK_TEXT)
-
-
-async def create_task(callback: CallbackQuery,
-                      button: Button,
-                      manager: DialogManager, ):
+async def save_task(callback: CallbackQuery, button: Button, manager: DialogManager):
     task_text = manager.dialog_data.pop("temp_task_text")
     category_name = manager.dialog_data.pop("temp_category", None)
     scheduled_at = manager.dialog_data.pop("scheduled_at", None)
-    await save_task(task_text, callback.from_user.id, category_name, scheduled_at)
+    await create_task(task_text, callback.from_user.id, category_name, scheduled_at)
     await manager.switch_to(BotStates.TASKS)

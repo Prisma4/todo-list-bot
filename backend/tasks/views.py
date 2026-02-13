@@ -30,7 +30,7 @@ class TasksModelViewSet(viewsets.ModelViewSet):
         content = serializer.data.get('content')
         scheduled_at = serializer.data.get('scheduled_at')
 
-        if user_id is not None and content is not None:
+        if user_id is not None and content is not None and scheduled_at is not None:
             app.send_task("bot.send_message", args=[user_id, content], eta=scheduled_at)
 
         headers = self.get_success_headers(serializer.data)

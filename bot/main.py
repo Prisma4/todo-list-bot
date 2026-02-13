@@ -1,13 +1,12 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from aiogram.filters import CommandStart
-from aiogram.types import Message
-from aiogram_dialog import setup_dialogs, StartMode, DialogManager
+from aiogram_dialog import setup_dialogs
 
 from dialogs.tasks import main_dialog
+from handlers import start
 from settings import Settings
-from states import BotStates
+
 
 logging.basicConfig(level=logging.INFO)
 
@@ -18,11 +17,7 @@ dp = Dispatcher()
 setup_dialogs(dp)
 
 dp.include_router(main_dialog)
-
-
-@dp.message(CommandStart())
-async def user_start(message: Message, dialog_manager: DialogManager):
-    await dialog_manager.start(BotStates.START, mode=StartMode.RESET_STACK)
+dp.include_router(start.router)
 
 
 async def main():
