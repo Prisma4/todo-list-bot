@@ -8,7 +8,7 @@ A Telegram bot which uses Django REST API, providing users with simple ToDo list
 1. Clone the repository
 
 ```bash
-git clone https://github.com/Prisma4/todo-list-bot.git
+git clone https://github.com/Arsterid/todo-list-bot.git
 cd todo-list-bot
 ```
 
